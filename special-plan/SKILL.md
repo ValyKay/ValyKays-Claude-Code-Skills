@@ -19,7 +19,7 @@ When active, you take two sequential roles: first **plan author** (Phase 2), the
 ## Hard rules
 
 1. **Do NOT enter plan mode.** Operate entirely in normal mode. Write the plan file with `Write`, edit in place with `Edit`. Plan mode is a different instrument with its own on-disk home (`~/.claude/plans/`); this skill writes to the target repository, not there.
-2. **Do NOT run Codex in parallel with Claude subagents in the same review pass.** The two lenses differ in shape (see "Reviewer strenghts" near the end). Parallel runs would conflate findings and destroy per-vendor attribution. Each pass is either the Claude cohort OR Codex, never both.
+2. **Do NOT run Codex in parallel with Claude subagents in the same review pass.** The two lenses differ in shape (see "Reviewer strengths" near the end). Parallel runs would conflate findings and destroy per-vendor attribution. Each pass is either the Claude cohort OR Codex, never both.
 3. **Do NOT invoke Codex for coding inside this skill.** Codex is strictly a reviewer here. Implementation dispatch is the user's decision and lives outside this skill's scope.
 4. **Do NOT invoke the same reviewer more than two consecutive passes.** If passes N-1 and N both used the Claude cohort, pass N+1 must be Codex (or stop). Same in reverse. This forces cross-vendor coverage and prevents thrash on a single lens.
 5. **Do NOT save per-iteration snapshots.** The plan file is edited in place across iterations. The session transcript is the audit.
@@ -357,7 +357,9 @@ Key differences from the fresh call:
 - **All other flags stay the same** (`--json`, `--dangerously-bypass-approvals-and-sandbox`, `--skip-git-repo-check`, `< /dev/null`).
 - **The follow-up prompt should be MUCH shorter** than the fresh-pass prompt — see "Follow-up prompt shape" below.
 
-**Follow-up prompt shape — keep it tight on resumed passes.** On a resumed pass, Codex already has the plan, prior findings, and prior fixes in context. A resumed-pass prompt can be 5-10 sentences. Recommended template:
+#### Follow-up prompt shape
+
+Keep it tight on resumed passes. On a resumed pass, Codex already has the plan, prior findings, and prior fixes in context. A resumed-pass prompt can be 5-10 sentences. Recommended template:
 
 ```
 The plan at {plan_path} has been edited based on prior review findings (yours and the Claude cohort's). Please re-review the changes in the plan since your last pass and report any NEW issues, focusing on:
