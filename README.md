@@ -24,14 +24,6 @@ Iteration caps mean repeated runs retire converged agents automatically — nobo
 
 Usage: `/full-review`
 
-### special-review
-
-The review counterpart to `special-plan`. A multi-pass code-review loop that alternates the in-house cohort with **Codex** pass after pass, applies judgment between rounds, and stops the moment both lenses have run out of new things to say. No auto-fixes — the skill reviews and hands findings back; between passes you pick who applies the edits (Claude, Codex, or you). User-supplied iteration counts are ceilings, not contracts.
-
-Requires the `codex` CLI on PATH and an `AGENTS.md` in the project root for Codex passes. Without them, the skill degrades gracefully to a cohort-only loop.
-
-Invoke explicitly: `use special-review` (it deliberately won't trigger on generic "review this" requests — `/full-review` is the default for that).
-
 ### plan-review
 
 Three specialists audit your implementation plan **before** you write a line of code. The architect checks design fit, the explorer verifies that the file paths and signatures you cited actually exist, and the silent-failure-hunter asks the uncomfortable "what could possibly go wrong" questions.
@@ -49,6 +41,14 @@ Invoke explicitly: `use special-plan` (it deliberately won't trigger on generic 
 #### Dangerous
 
 For complete autonomy, run Claude Code with the `--dangerously-skip-permissions` argument. Otherwise, Codex invocations must be manually approved.
+
+### special-review
+
+The review counterpart to `special-plan`. A multi-pass code-review loop that alternates the in-house cohort with **Codex** pass after pass, applies judgment between rounds, and stops the moment both lenses have run out of new things to say. No auto-fixes — the skill reviews and hands findings back; between passes you pick who applies the edits (Claude, Codex, or you). User-supplied iteration counts are ceilings, not contracts.
+
+Requires the `codex` CLI on PATH and an `AGENTS.md` in the project root for Codex passes. Without them, the skill degrades gracefully to a cohort-only loop.
+
+Invoke explicitly: `use special-review` (it deliberately won't trigger on generic "review this" requests — `/full-review` is the default for that).
 
 ### codex-review
 
