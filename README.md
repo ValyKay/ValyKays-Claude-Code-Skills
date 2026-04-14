@@ -44,7 +44,7 @@ For complete autonomy, run Claude Code with the `--dangerously-skip-permissions`
 
 ### special-review
 
-The review counterpart to `special-plan`. A multi-pass code-review loop that alternates the in-house cohort with **Codex** pass after pass, applies judgment between rounds, and stops the moment both lenses have run out of new things to say. No auto-fixes — the skill reviews and hands findings back; between passes you pick who applies the edits (Claude, Codex, or you). User-supplied iteration counts are ceilings, not contracts.
+The review counterpart to `special-plan`. A multi-pass code-review loop that alternates the in-house cohort with **Codex** pass after pass, applies judgment between rounds, and stops the moment both lenses have run out of new things to say. No auto-fixes — the skill reviews and hands findings back; between passes you pick who applies the edits (Claude, Codex, or you). Or tell Claude from the beginning who fixes what. User-supplied iteration counts are ceilings, not contracts.
 
 Requires the `codex` CLI on PATH and an `AGENTS.md` in the project root for Codex passes. Without them, the skill degrades gracefully to a cohort-only loop.
 
