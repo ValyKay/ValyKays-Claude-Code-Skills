@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "valykays-claude-code-plugins",
+  "description": "ValyKays' Claude Code Plugins — supporting plugins for the ValyKays skill collection.",
+  "owner": {
+    "name": "ValyKays"
+  },
+  "plugins": [
+    {
+      "name": "synthesis-author",
+      "description": "Single-agent plugin: consume a code diff or implementation plan plus N notes files of flagged issues, verify each claim against the actual code, and produce a per-finding implementation spec. Designed to be dispatched by orchestrating skills (e.g. debate-review, debate-plan).",
+      "category": "development",
+      "source": "./synthesis-author"
+    }
+  ]
+}

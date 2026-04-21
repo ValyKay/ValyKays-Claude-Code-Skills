@@ -1,0 +1,9 @@
+{
+  "name": "synthesis-author",
+  "version": "0.1.0",
+  "description": "Single-agent plugin: consume a code diff or implementation plan plus N notes files of flagged issues, verify each claim against the actual code, and produce a per-finding implementation spec. Designed to be dispatched by orchestrating skills (e.g. debate-review, debate-plan).",
+  "author": {
+    "name": "ValyKay"
+  },
+  "license": "MIT"
+}
