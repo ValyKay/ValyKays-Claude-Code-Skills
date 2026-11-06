@@ -52,11 +52,13 @@ Both skills are kept; the choice is preference-based. Phase 1 includes a workflo
 
 3. **Debate has no hard iteration cap.** Typical convergence is 2–3 exchanges; stop when findings stop moving, not when a counter hits a number. If a debate is still generating new signal after 3 exchanges, keep going. If it's spinning after 2, stop and surface the unresolved point to the user.
 
-4. **The implementer is the overall debate winner.** One verdict at convergence, not per-finding. Scoring is bidirectional (see Phase 8 for detail): you accumulate wins when your picks hold up against Codex's critique OR when your counter to a Codex-proposed fix holds under Codex's defense; Codex accumulates wins when it materially corrects your picks OR when its proposed fix holds under your counter. "Materially" means adding a new option, a new constraint, or changing the diagnosis — NOT just eliminating an option you had already enumerated (that's option-pruning, scored as neither-wins on that finding). Ties go to Codex since Codex has fresh-POV verification on the diff. Winner implements all converged findings in a single pass.
+4. **The implementer is the overall debate winner.** One verdict at convergence, not per-finding. Scoring is bidirectional (see Phase 8 for detail): you accumulate wins when your picks hold up against Codex's critique OR when your counter to a Codex-proposed fix holds under Codex's defense; Codex accumulates wins when it materially corrects your picks OR when its proposed fix holds under your counter. "Materially" means changing the diagnosis, or adding a new option or constraint for a case that passes the justification test (hard rule 7) — NOT just eliminating an option you had already enumerated (that's option-pruning, scored as neither-wins on that finding), and NOT handling a case nothing produces (also neither-wins). Ties go to the side with more wins on Justified findings, then to Codex since Codex has fresh-POV verification on the diff. Winner implements all converged findings in a single pass.
 
 5. **Trivial/mechanical findings bypass the debate loop.** Wrong line number, stale import, typo, dead import — fix these directly after each team's pass. No synthesis, no Codex critique. Debate is expensive; spend it on findings that involve real design choices.
 
 6. **User retains the right to stop, redirect, or override at any point.** When stopping (convergence or otherwise), always summarize and return control to the user. Do not declare the review "done" unilaterally. Findings deferred to user during debate halt for user input — auto-dispatch covers converged findings only.
+
+7. **A fix must be justified by its trigger, not only correct.** A finding can be technically correct and still not justify a change: the input that triggers it is one nobody produces, or the sequence is one nobody performs. Every substantive finding states its **trigger** — the concrete input or usage that makes the defect happen, and who or what produces it — and gets a **justification verdict** from evidence (see "The justification test" in Phase 6): **Justified**, **Borderline** or **Not justified**. Not-justified findings are parked: listed in the report and **recorded in the project's declined-findings log** (see "The declined-findings log"), never debated, never implemented in this run, however small the fix — so that a later run, or new evidence, can re-assess them. The burden is on the finding: a trigger that is not named ("a malformed file could…", "if a caller passed…" where no caller does) is Not justified by default. A correction that only adds handling for a not-justified trigger is not material and wins nothing (Phase 8).
 
 ## Phase 1: Preflight
 
@@ -103,7 +105,9 @@ Both skills are kept; the choice is preference-based. Phase 1 includes a workflo
 
    Pause for user confirmation if the recommendation is anything other than "Justified." On user confirmation (or "Justified" verdict), proceed to Phase 2.
 
-7. **Summarize scope** (file count, line delta, areas touched, plan correlation, recommendation outcome).
+7. **Re-assess the declined-findings log for this scope.** If the project has a log (see "The declined-findings log"), list its `open` and `kept` entries whose file falls in the scope. For each, check its revisit condition against what the project holds now (the data, the callers, the formats handled) and whether the code still has the defect. Mark `obsolete` where it does not. Where the condition is met, mark it `promoted` (pending) and carry it into this run as a parked substantive with its new trigger evidence, tagged with its entry id. Leave the rest `open`. Announce: "Declined log: N in scope — P promoted into this run, O obsolete, K still open."
+
+8. **Summarize scope** (file count, line delta, areas touched, plan correlation, recommendation outcome, declined entries re-assessed).
 
 ## Phase 2: Cohort review pass
 
@@ -135,6 +139,8 @@ Find errors, wrong assumptions, bugs, logic flaws, inconsistencies, and violatio
 
 Also surface improvement opportunities that do not expand scope beyond the current change. Categorize each finding as Error, Omission, or Improvement.
 
+For every Error or Omission, state its trigger: the concrete input or usage that makes it happen and who or what produces that input in practice (a real file or data source the project handles, an ordinary user action, a setting users have, another program the product runs beside). Say how you know — reproduced, seen in the project's data, or reasoned. If you cannot name a producer, write "trigger: none known" rather than inventing one; the finding is still reported.
+
 Read CLAUDE.md and AGENTS.md (if present) in the project root for project conventions.
 
 **Confidence filtering: relax to ≥50 for this dispatch.** Your default behavior may be to filter findings to ≥80 confidence to minimize false positives. For debate-review use, that filter hides findings the downstream synthesis would benefit from triaging. Report any finding ≥50 confidence — this dispatch is part of a multi-stage workflow that triages further (synthesis dedupes against a parallel reviewer's output, then a debate phase converges on real picks). Better to over-surface here and let the workflow filter than to pre-filter and lose coverage.
@@ -149,11 +155,12 @@ Wait for all dispatched agents to complete before compiling. Do not start acting
 ## Phase 3: Apply cohort's trivials directly
 
 Triage cohort's findings:
-- **Trivial** — single concrete target, one obviously correct fix, low-risk (wrong line, typo, missing null guard with one obvious fix, dead import). Apply with `Edit` immediately.
+- **Trivial** — single concrete target, one obviously correct fix, low-risk (wrong line, typo, missing null guard with one obvious fix, dead import). Apply with `Edit` immediately. A trivial *code* change (a guard, a check, a fallback) still needs a trigger that passes the justification test; wording, comment and documentation fixes do not.
 - **Substantive** — multiple viable resolutions, design choice, framing question, or scope. Park in a "cohort substantives" list.
+- **Not justified** — correct, but its trigger is not shown and no realistic producer is named (the justification test, Phase 6). Park in a "not justified" list with the trigger as stated and why it falls short. Not applied, even when the fix would be trivial.
 - **Dismissed** — false positives. Drop with a one-line reason.
 
-Announce: "Cohort: N findings — X trivial (applied), Y substantive (parked), Z dismissed."
+Announce: "Cohort: N findings — X trivial (applied), Y substantive (parked), J not justified (listed), Z dismissed."
 
 The diff now has cohort's trivials applied; substantives are pending.
 
@@ -187,8 +194,11 @@ Report findings with severity (High / Medium / Low) and a category tag:
 Shape per finding:
 ```
 **[severity] [category]** description (file:line)
+**Trigger:** <the concrete input or usage that makes it happen, who or what produces it in practice, and how you know: reproduced / seen in the project's data / reasoned; "none known" if you cannot name a producer>.
 **Proposed fix:** <specific change — what file/line, what to add/remove/modify, main tradeoff>.
 ```
+
+Severity follows the trigger as well as the harm: a defect whose trigger nobody produces is Low whatever it would break.
 
 For every finding, propose a specific fix. Do NOT implement — describe the change in enough detail that it can be debated in a later synthesis phase. If the finding has multiple viable fixes, name the one you'd pick and one-line why; the synthesis phase may counter-propose.
 
@@ -222,7 +232,7 @@ Resume prompt: "Re-review. Find issues you missed on the first pass. Focus on se
 
 ## Phase 5: Apply baseline's trivials directly
 
-Same triage rules as Phase 3. Apply trivials with `Edit`. Park substantives in a "baseline substantives" list.
+Same triage rules as Phase 3, the justification test included. Apply trivials with `Edit`. Park substantives in a "baseline substantives" list and not-justified findings in the "not justified" list.
 
 The diff now has cohort's AND baseline's trivials applied; both substantive lists are pending.
 
@@ -232,20 +242,66 @@ Dedupe across cohort and baseline parking lots. For each finding:
 - **Same issue, different framing** — merge into one entry. Tag source as "both." If both teams proposed fixes, keep both proposals as options.
 - **Different issues** — keep separate. Tag source as "cohort" or "baseline." Baseline-sourced findings carry Codex's proposed fix from Phase 4 — preserve it, it becomes input to the synthesis.
 - **Same finding, different fix** — keep both options, decide in synthesis.
+- **Already in the declined log** — a finding that matches an `open` or `kept` entry (same symbol, same defect) is not re-argued: cite the entry id. If the finding brings trigger evidence the entry did not have, re-assess it now and append the result to the entry (`promoted` carries it into this run; `kept` records the new evidence). If it brings nothing new, it stays declined and the report names the entry.
+
+### The justification test
+
+Before classifying, give every deduped Error or Omission a justification verdict from the evidence about its trigger. The verdict rests on what can be checked, not on how serious the defect sounds:
+
+| Verdict | When | What happens |
+|---|---|---|
+| **Justified** | The trigger is **shown**: reproduced on real data or inputs the project actually handles, or on a path ordinary use takes. Or it is **named and realistic** — a specific producer writes that input (a tool, a format version, a common setting, a second language, a program the product runs beside) — **and** the harm is a wrong result, a crash, lost data, or a broken contract. | Proceeds as below. |
+| **Borderline** | The trigger is named and realistic but not shown, and the harm is modest (a misleading message, a degraded display); or the trigger is shown but the harm is cosmetic. Also, at worst, any finding whose harm is a security exposure or loss of the user's persisted data, whatever its trigger. | Proceeds, with the smallest change that removes the defect: no new options, abstractions, messages or strings unless the defect needs them. The debate may not widen it. |
+| **Not justified** | No trigger shown and no realistic producer named — the input is one nothing writes, the call one no caller makes, the sequence one nobody performs — or the change would add more surface (branches, messages, API, strings, checks to maintain) than the defect could ever cost. | Parked in the "not justified" list with its trigger and the reason. Not debated, not implemented, not counted in the verdict. |
+
+Rules for the test:
+- **Look before ruling.** Where the project holds real data or inputs, check whether any of them carries the trigger (a grep, a query, a probe). "None of the N real files has it" is evidence; so is one that does. Record the check.
+- **The finding carries the burden.** A trigger stated as "none known", or as a possibility without a producer, is Not justified unless you can name the producer yourself.
+- **Damaged input.** A defect that turns damaged or truncated input into a *silent* wrong result is Justified when that damage happens in practice (files cut off by transfer, a program that writes them half-way); handling damage nobody produces is Not justified.
+- **Not by size.** A small fix to a not-justified finding is still parked: the accumulated surface is the cost.
+- **Say it.** Announce the verdicts: "Justification: X justified, Y borderline, J not justified (logged)."
+- **Write the revisit condition.** For each not-justified finding, state what evidence would make it justified (a file of that shape appearing, a producer starting to write it, a caller being added). It goes into the log with the finding.
+
+### The declined-findings log
+
+A declined finding is a judgement on the evidence of the day, not a verdict on the code forever. The log keeps it so it can be re-assessed when the evidence changes, and so a later run does not pay to rediscover and re-argue it.
+
+**Location.** The path the project's `CLAUDE.md` or `AGENTS.md` names for it; otherwise `docs/reviews/declined-findings.md` in the repository. Create it on first use with a one-paragraph header saying what it is. It is a load-bearing artifact (unlike an ad-hoc synthesis): it stays in the repository and is committed with the run's other changes. If the project must not hold it there (a publishable tree, evidence that names private data), ask the user where it goes and record the answer in the orientation file.
+
+**One entry per declined finding**, appended, never rewritten — later assessments are added under it:
+
+```
+### D-<YYYYMMDD>-<n> — <one-line defect>   (status: open)
+- Where: <file> — <function or symbol> (line <n> at <commit>); lines move, the symbol is the anchor
+- Raised by: cohort / baseline / both / Codex critique / verification; run: <scope, commit>
+- Defect: <what goes wrong, and the harm if it happened>
+- Trigger: <as stated by the finding>
+- Evidence: <what was checked — data searched, producers considered — and what it showed>
+- Why not justified: <one line>
+- Revisit when: <the evidence that would make it justified>
+- Proposed fix (not applied): <one line, as the finding proposed it>
+```
+
+Statuses: `open` (declined, revisit condition not met), `promoted` (re-assessed as Justified or Borderline and fixed — name the run and commit), `obsolete` (the code no longer has the defect — name the commit), `kept` (re-assessed and still not justified — add the date and the new evidence). A re-assessment appends a line `- <date>: <status> — <evidence>`; the entry's header status follows the latest line.
+
+**What goes in.** Every not-justified finding from Phases 3, 5 and 6, every correction declined in Phase 7, and every not-justified finding of the Phase 9 verification pass. Not dismissed findings — those were false, not unjustified.
+
+**Written when.** Append the entries before Phase 8 (so the implementer can see what not to touch) and the Phase 9 ones before reporting. Entries promoted into this run get their outcome line once the fix has passed Phase 9 (`promoted` with the commit, or `kept` if the debate declined it again).
 
 Re-classify the deduped union:
 - **Trivial-after-correlation** — sometimes a finding looked substantive in isolation but is trivial once both teams' framings are visible (e.g., one team identified the bug, the other proposed the obvious fix). Apply now.
 - **Bug-shaped substantive** — real issue with one obvious right answer; debate will likely converge fast (often Codex concedes on critique, or you concede after verifying). Synthesize tersely.
 - **Design-judgment substantive** — multiple viable choices with real tradeoffs. The high-value debate fodder.
+- **Not justified** — by the test above; listed, not carried further.
 - **Dismissed** — false positives surfaced by either team.
 
-Announce: "Union after correlation: N substantive — X bug-shaped, Y design-judgment, Z trivial-after-correlation (applied), W dismissed."
+Announce: "Union after correlation: N substantive — X bug-shaped, Y design-judgment, Z trivial-after-correlation (applied), J not justified (listed), W dismissed."
 
-### Judgment: is debate even worth it for the remaining substantives?
+### Judgment: does each remaining substantive need a debate?
 
-Not every substantive finding earns a debate. Skip debate when:
-- The finding is real but the fix is obvious and uncontroversial even if not trivial (e.g., "you need to add a null check here" — real, substantive, but one right answer). Apply directly.
-- The finding is marginal and the user's time matters more than perfecting this diff. Defer.
+This comes after the justification test: only Justified and Borderline findings are left. Not every one of them earns a debate. Skip debate when:
+- The finding is real but the fix is obvious and uncontroversial even if not trivial (e.g., "you need to add a null check here" for an input that occurs — real, substantive, but one right answer). Apply directly.
+- The finding is Borderline and its smallest change is plain. Apply directly.
 - Applying the fix would take less time than writing the synthesis entry. Apply directly.
 
 Engage debate when:
@@ -290,7 +346,7 @@ cat > /tmp/debate_review_notes_baseline.md <<'NOTES'
 NOTES
 ```
 
-The orchestrator's job at this step is purely transcription: the parked substantives go to disk in a form the subagent can consume. Trivials are NOT included (they were applied in Phases 3 and 5). Dismissed flags are NOT included.
+The orchestrator's job at this step is purely transcription: the parked substantives go to disk in a form the subagent can consume, each with a `Trigger:` line (as reported, plus the evidence from the justification test) and its verdict, Justified or Borderline. Trivials are NOT included (they were applied in Phases 3 and 5). Dismissed and not-justified flags are NOT included.
 
 If both teams flagged the same surface with different framings, write both flags into both notes files (or a third merged notes file `/tmp/debate_review_notes_merged.md`) — let the subagent reconcile via verification.
 
@@ -307,6 +363,7 @@ Notes files:
 Output spec path: <synthesis-path resolved above>.
 
 Produce the per-finding implementation spec. Verify every flag against the actual code before writing.
+Each flag states its trigger and whether it is Justified or Borderline. Keep each change proportionate to its trigger: for a Borderline flag, the smallest change that removes the defect. Dismiss a flag whose trigger the code or data shows cannot occur.
 ```
 
 **Hard rule on the dispatch prompt.** Do NOT mention: "review", "reviewer", "critique", "round", "debate", "another pass", "this will be implemented", "downstream verification", "Codex", or any other workflow-shape signal. The subagent must believe the spec is the final deliverable. Only the subagent's `description` (which the orchestrator reads when choosing to dispatch) and the subagent's own system prompt know what the agent does — the dispatch prompt itself is bounded to inputs + outputs + repo context.
@@ -333,6 +390,8 @@ Critique the reasoning in the synthesis — not the diff itself. For each A–Z,
 
 Cohort-sourced findings get the usual treatment: critique the Pick against the code.
 
+Every finding carries a trigger and a verdict (Justified or Borderline). An objection that asks for handling of a further case must name that case's trigger — the input or usage that produces it and who produces it — or it will not be taken up. Do not widen a Borderline change. You may also argue that a finding is not justified (its trigger is not shown and has no producer); give the evidence.
+
 Verify specific claims against actual code before objecting. Cite file:line.
 
 Plain-OK on any finding is the convergence signal. Do not manufacture objections to fill space. Equally: do not soften critique to look generous.
@@ -353,14 +412,16 @@ The orchestrator's role at this step is **adjudicator**, not author. The synthes
 1. **Verify the specific claim.** Codex can hallucinate line numbers or misread context. Open the cited file, confirm the claim. Equally: re-verify the spec's original claim against the code if Codex's challenge is plausible.
 2. **Evaluate the diagnosis.** Is Codex's read correct? Or is it responding to a misreading of the spec rather than the code?
 3. **Evaluate the correction.** If Codex proposes a different pick, is its pick actually better than the spec's — or different-but-equivalent, or worse in a way Codex didn't notice?
-4. **Decide: integrate, counter, or defer.**
-   - **Integrate**: Codex is right, the spec's Pick was wrong. Append a revision adopting Codex's correction.
+4. **Apply the justification test to the correction itself.** An objection that is true in the code may still ask for handling of a case nothing produces. Ask what triggers the added case and who produces it; check the project's real data where it can say. A correction whose added case fails the test is declined as not justified — that is a legitimate counter, not a concession to avoid.
+5. **Decide: integrate, counter, decline, or defer.**
+   - **Integrate**: Codex is right, the spec's Pick was wrong, and the case it adds is justified. Append a revision adopting Codex's correction.
    - **Counter**: Codex missed something the spec got right (or both missed something a third option covers). Write a pushback anchored in the verified code.
+   - **Decline as not justified**: the correction is true but its added case fails the justification test. Write the revision with the trigger evidence; move the case to the "not justified" list.
    - **Defer**: neither obviously right; surface to user for final call.
 
 The orchestrator may also independently catch a spec Pick that Codex plain-OK'd but the verified code shows is wrong. Append a revision in that case too — the spec is not exempt from orchestrator scrutiny just because Codex didn't object.
 
-**Pushback discipline.** When countering Codex, be specific and anchored in code. Not "I disagree" — "your pick breaks X because file:line shows Y." Pushbacks that can't be grounded in code claims should be converted to defers (surface to user) instead of asserted as counter-positions.
+**Pushback discipline.** When countering Codex, be specific and anchored in code or in trigger evidence. Not "I disagree" — "your pick breaks X because file:line shows Y", or "none of the 40 real inputs carries this shape and no producer writes it." Pushbacks that can't be grounded in code claims or trigger evidence should be converted to defers (surface to user) instead of asserted as counter-positions. Integrating an objection only because it is true, without asking whether its case is justified, is the rubber-stamping of hard rule 2.
 
 **Before asserting a counter, enumerate the layers the change touches and defend each layer separately.** Monolithic framings like "this is by design" are often right-for-some-layers and wrong-for-others. List the layers involved (e.g. backend pipeline, HTTP routes, frontend display) and confirm your defense holds at each — or narrow the pushback to the layers it covers and concede the rest. The failure mode this prevents: asserting "by design" globally, Codex refines the finding into a concrete bug in the layer you didn't examine, and the debate round that should have converged instead reveals the counter was partially wrong.
 
@@ -384,6 +445,13 @@ Codex argued <quote or summary>. Correct, but <your counter, anchored in code>.
 **Revised pick.** <your refined pick>
 ```
 
+Or, when the correction is true but its added case is not justified:
+
+```
+## <Letter> — Revision (declined: not justified)
+Codex asked for <the added case>. Its trigger: <what would produce it>. Evidence: <the check — real data searched, producers considered>. Not justified; listed, the pick stands.
+```
+
 Append, don't rewrite in place. The debate history is part of the artifact.
 
 ### Iterate the debate
@@ -396,6 +464,7 @@ I've updated <synthesis-path> with Revisions after your pass 1 critique.
 For findings where I integrated your correction, try to find any residual issue.
 For findings where I pushed back, evaluate my counter — did I address your objection, or miss a case you still see?
 For findings you approved as-is, no re-review needed unless something in my Revisions changed them.
+Where I declined a case as not justified, contest it only with a trigger: who produces that input, and the evidence.
 
 Plain-OK on any finding is the convergence signal; do not manufacture new objections.
 
@@ -413,23 +482,31 @@ At convergence, determine one overall winner. The winner implements all converge
 
 ### Determining the winner
 
-Tally across substantive findings only (trivials were already applied, deferred findings aren't being implemented). Scoring is bidirectional — both sides can accumulate wins on different findings, and the overall winner is whoever has more at convergence.
+Tally across substantive findings only (trivials were already applied, deferred findings aren't being implemented, not-justified findings aren't being implemented). Scoring is bidirectional — both sides can accumulate wins on different findings, and the overall winner is whoever has more at convergence.
+
+The score measures who got the fixes right **for the cases that justify a fix**. Being right about a case nothing produces earns nothing.
 
 Per finding, score one of:
 
 - **Your win** — one of:
   - Codex plain-OK'd your Pick in its final pass (cohort-sourced finding).
   - You countered Codex's baseline-proposed fix with an alternative Pick, and your counter held under Codex's defense.
+  - You declined Codex's correction as not justified, Codex contested the decline with a trigger, and that trigger failed the test when you checked it.
   - Codex's objection to your Pick was cosmetic (message wording, variable naming, phrasing) and didn't change the Pick.
 - **Codex's win** — one of:
-  - Codex materially corrected your Pick. "Materially" = added a new option, added a constraint, or changed the diagnosis. Eliminating an option you had already enumerated is NOT a material correction — that's option-pruning, scored below.
+  - Codex materially corrected your Pick. "Materially" = changed the diagnosis, or added an option or a constraint **for a case that passes the justification test**. Eliminating an option you had already enumerated is NOT a material correction — that's option-pruning, scored below.
   - You adopted Codex's baseline-proposed fix and it held through debate.
   - Your counter to Codex's baseline-proposed fix failed under Codex's defense; you folded to the baseline proposal.
-- **Option-pruning (no win)** — Codex eliminated an option you had listed in your Options, and you fell back to another option already in your list. Codex's contribution was constraint-identification, not fix-proposal. Score as zero for both sides; the finding converged but neither side "won" it.
+  - You declined a correction as not justified and Codex showed a trigger that passes the test.
+- **No win** — one of:
+  - **Option-pruning**: Codex eliminated an option you had listed in your Options, and you fell back to another option already in your list. Codex's contribution was constraint-identification, not fix-proposal.
+  - **Not justified, uncontested**: the only disagreement concerned a case that fails the justification test, whoever raised it, and nobody contested that with a trigger. The case goes to the "not justified" list.
 
-Final verdict: more wins = winner. Ties go to Codex since Codex has fresh-POV verification on the diff.
+  Score as zero for both sides; the finding converged but neither side "won" it.
 
-Announce the verdict in one sentence with a per-finding tally: "Codex won 3–1 with 2 prunings (won D: added Express 4 async constraint, won G: proposed middleware fix held, won K: adopted baseline proposal; lost H: my counter held; pruned C/F). Dispatching Codex to implement." Or: "I won 5–2 with 1 pruning (lost A/K material corrections, won B/D/F/I/N Pick-as-written + counter-on-J held, pruned H). Implementing directly."
+Final verdict: more wins = winner. On a tie, the side with more wins on **Justified** (not Borderline) findings; if still tied, Codex, since it has fresh-POV verification on the diff.
+
+Announce the verdict in one sentence with a per-finding tally: "Codex won 3–1 with 2 prunings and 1 not justified (won D: added Express 4 async constraint, won G: proposed middleware fix held, won K: adopted baseline proposal; lost H: my counter held; pruned C/F; E's added case not justified). Dispatching Codex to implement." Or: "I won 5–2 with 1 pruning (lost A/K material corrections, won B/D/F/I Pick-as-written, N declined as not justified + counter-on-J held, pruned H). Implementing directly."
 
 Deferred findings (ones the debate surfaced to user for final call) are NOT implemented in this pass. They wait for user decision.
 
@@ -442,7 +519,7 @@ Deferred findings (ones the debate surfaced to user for final call) are NOT impl
 ```
 Now implement the fixes we converged on. The spec is <synthesis-path> — both original per-finding sections AND "Revisions after Codex critique" blocks. Where they conflict, the Revisions block wins.
 
-Implement ALL converged findings — do not split by ownership. The debate verdict assigned implementation to you. Do not touch deferred findings (marked as such in the synthesis). Do not expand scope.
+Implement ALL converged findings — do not split by ownership. The debate verdict assigned implementation to you. Do not touch deferred findings (marked as such in the synthesis). Do not expand scope: no handling for cases the spec declined as not justified, and Borderline changes kept to the smallest change the spec names.
 
 If you hit an inconsistency between the spec and what the code actually permits, stop and report. Do not guess.
 
@@ -460,6 +537,7 @@ After implementation, the diff has changed. New lines exist that weren't reviewe
 **Default**: spot-check + single verification pass.
 - Run available syntax/type/build checks (`node --check`, `tsc --noEmit`, build command). If clean, proceed.
 - Dispatch ONE more pass against the new lines only — alternate the team that didn't run last (if Phase 8 was Codex-implementing-after-debate, this pass is cohort; if you-implementing, this pass is Codex). Different vantage on fresh code.
+- The verification pass's findings go through the same justification test. A regression the implementation introduced is Justified when the input it breaks is input the code handled correctly before the fix and that input occurs in practice.
 
 **Identity-neutral framing in the verification dispatch.** When the verification pass is cohort dispatched after Codex implemented, the cohort prompt MUST refer to the changes neutrally — "review the recently-implemented changes" or "review the changes since commit X" — NOT "review Codex's implementation." Naming the prior implementer in a critique-of-its-work prompt primes the reviewer with peer-competitor framing that distorts critique posture. Same applies in reverse: a Codex verification pass after you implemented should describe the changes neutrally, not "review the orchestrator's implementation." This is the same principle as the synthesis Source field above and applies to every cross-team dispatch.
 
@@ -486,8 +564,12 @@ Working as designed when:
 - Verdict distribution over multiple runs is genuinely bidirectional (not Codex-always-wins). If your counters never hold, you're rubber-stamping; if Codex's proposals never survive, you're reflexively countering.
 - Post-implementation verification produces fewer findings than Phase 2/4, lower severity.
 - Phase 1 recommendation step occasionally suggests dropping back to a simpler workflow when the diff doesn't justify the overhead — and the user accepts the recommendation when reasonable.
+- Every implemented fix has a trigger someone produces; the "not justified" list is non-empty on mature code, and its entries name what was checked.
+- Every declined finding is in the log with a revisit condition someone could check; later runs over the same files re-assess the entries instead of re-arguing them, and entries do move — some promoted, some obsolete.
 
 Malfunctioning when:
+- Fixes for cases nothing produces dominate the implemented set — refusals of inputs no producer writes, guards for calls no caller makes, checks for both. Fix: apply the justification test at triage and to every correction; look at the project's real data before ruling.
+- Codex wins nearly every run because its corrections add constraints for unproduced cases that you integrate because they are true. Fix: score them as neither-wins and decline them (hard rule 7).
 - Every Codex objection is rubber-stamped (you're not participating). Fix: push back harder; verify every Codex claim before integrating.
 - Every Codex objection is rejected (you're defending). Fix: verify each objection against code with fresh eyes.
 - Debate exceeds 4 exchanges. Fix: surface unresolved point to user; stop bouncing.
@@ -500,7 +582,8 @@ Malfunctioning when:
 
 When stopping (convergence or user request), summarize:
 
-- **Findings landscape**: cohort-only / baseline-only / both / debate-emergent / total trivial vs substantive vs deferred.
+- **Findings landscape**: cohort-only / baseline-only / both / debate-emergent / total trivial vs substantive vs deferred; Justified vs Borderline among the substantive.
+- **Not justified**: each declined finding in one line — its log id, the defect, its trigger as stated, the evidence checked — and the log's path. Also the log entries re-assessed in Phase 1 or Phase 6 and their new status. The user may promote any entry; a promotion is recorded in the log with the user as its source.
 - **Debate outcome**: overall verdict (you won / Codex won); one-line rationale; deferred findings.
 - **Implementation status**: what's done, what's pending, verification results.
 - **Open items**: deferred findings, known limitations, follow-up work.
